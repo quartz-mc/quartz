@@ -214,3 +214,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Minecraft
+.jar
+assets/
+instances/
+java/
+versions/
+libraries/
+natives
+logs/
