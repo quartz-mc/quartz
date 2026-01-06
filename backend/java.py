@@ -2,6 +2,62 @@ import brand
 import os
 import subprocess
 import assets as _assets
+import requests
+import platform
+import urllib.request
+import zipfile
+import tarfile
+
+class JavaSource:
+    ADOPTIUM = 0
+    ORACLE = 1
+
+def getJava(jsrc,feature_version):
+    os.makedirs("java",exist_ok=True)
+    if os.path.exists(f"java/{feature_version}"): return ["warn","Exists"]
+    print("\n# Getting Java...\n")
+    match jsrc:
+        case JavaSource.ADOPTIUM:
+            system = platform.system().lower()
+            if system == "darwin": system = "mac"
+            if system == "java": raise SystemError("Jython is not supported, as it does not give meaningful platform.system() information.")
+            machine = platform.machine().lower()
+            machine = machine.replace("x86_64","x64")
+            machine = machine.replace("i386","x86")
+            machine = machine.replace("i686","x86")
+            if machine.startswith("arm"): machine = "arm"
+            if not machine in ["x64","x86","arm","aarch64","ppc64","ppc64le","s390x","sparc64","riscv64"]: return ["fail",f"Adoptium does not support {machine}"]
+            url = f"https://api.adoptium.net/v3/assets/latest/{feature_version}/hotspot"
+            r = requests.get(url,{"architecture":platform.machine(),"image_type":"jre","os":system,"vendor":"eclipse"})
+            if r.status_code == 200:
+                print("- Got ADOPTIUM source.")
+                r = r.json()
+                url = r[0]["binary"]["package"]["link"]
+                os.makedirs("/tmp/quartz/java",exist_ok=True)
+                urllib.request.urlretrieve(url,f"/tmp/quartz/java/archive")
+                """
+                the above retrieved file is a:
+                .tar.gz on linux and mac,
+                and .zip on windows."""
+                topmost = "/tmp/quartz/java/" + os.listdir("/tmp/quartz/java")[0]
+                if zipfile.is_zipfile(topmost):
+                    with zipfile.ZipFile(topmost,"r") as f:
+                        os.makedirs(f"java/{feature_version}/",exist_ok=True)
+                        f.extractall(f"java/{feature_version}/")
+                elif tarfile.is_tarfile(topmost):
+                    with tarfile.open(topmost,"r:*") as f:
+                        os.makedirs(f"java/{feature_version}/",exist_ok=True)
+                        f.extractall(f"java/{feature_version}/")
+                else:
+                    return ["fail","Bad archive."]
+                if len(os.listdir(f"java/{feature_version}")) == 1:
+                    os.rename(f"java/{feature_version}","java/_")
+                    os.rename(os.path.join(f"java/_",os.listdir(f"java/_")[0]),f"java/{feature_version}")
+                    os.rmdir("java/_")
+            else:
+                return ["fail","Request failed."]
+        case _:
+            print("- Illegal JavaSource passed.")
 
 class Assets:
     def __init__(self,path,index):
@@ -101,20 +157,22 @@ if __name__ == "__main__":
     thisVer = versionsDict["1.21.11"]
     versionId = thisVer.id
     versionType = thisVer.type
-    json = version.download(f"versions/{versionId}/",version=thisVer,type="json")
+    json = version.download(f"versions/{versionId}/",version=thisVer,type="json",modloader=version.Modloaders.FABRIC,modloaderVersion={"loader":"0.18.4"})
     assets = { # this is all the info i need.
         "id":json["assetIndex"]["id"],
         "sha1":json["assetIndex"]["sha1"]
     }
     version.download(f"assets/indexes/",json=json,type="assetIndex",sha1=assets["sha1"])
     _assets.download(f"assets/objects",f"assets/indexes/{assets['id']}.json")
-    version.download(f"versions/{versionId}/",json=json,type="jar")
+    version.download(f"versions/{versionId}/",json=json,type="jar",modloader=version.Modloaders.FABRIC,modloaderVersion={"loader":"0.18.4"})
     version.download(f"versions/{versionId}/natives",json=json,type="natives")
     version.download(f"libraries",json=json,type="libraries")
+    ret = getJava(JavaSource.ADOPTIUM,json["javaVersion"]["majorVersion"])
+    print(ret)
     javas = os.listdir("java")
     javaPath = f"java/{javas[0]}/bin/java"
     r = Runner(javaPath,f"versions/{versionId}/natives",Memory(512,2048),brand.Brand("Quartz","1.0.0"),ClassPath("libraries/",f"versions/{versionId}/client.jar"),
-               Instance(versionId,versionType,"instances/demo",Assets("assets/",f"{assets['id']}"),json["mainClass"]),auth.offline("cookiiq_dev"),
+               Instance(versionId,versionType,"instances/demo",Assets("assets/",f"{assets['id']}"),json["mainClass"]),auth.offline("quartz_dev"),
                ExtraArgs("",""))
     rc,args = r.run()
     print(f"\n\n\nGame exited with return code {rc}")

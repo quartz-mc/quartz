@@ -13,3 +13,6 @@ def offline(username):
     accessToken = "0"
     userType = "legacy"
     return Credentials(username,offlineUUID,accessToken,userType)
+
+def authenticate():
+    raise NotImplementedError("Authentication is not supported. Please use a client mod until this feature is added.")
