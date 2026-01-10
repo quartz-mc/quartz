@@ -1,7 +1,7 @@
-import brand
+import backend.brand as brand
 import os
 import subprocess
-import assets as _assets
+import backend.assets as _assets
 import requests
 import platform
 import urllib.request

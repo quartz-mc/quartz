@@ -2,7 +2,7 @@ from enum import Enum
 import requests,re,urllib.request,zipfile,os,hashlib,platform,pathlib
 import json as js
 import copy
-from debug import *
+from backend.debug import *
 
 def jsonInherit(base,child):
     result = copy.deepcopy(base)
@@ -216,4 +216,4 @@ def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VAN
                     if lib.endswith((".so",".dll",".dylib")):
                         jar.extract(lib,path)
             if result: os.remove(result)
-    return results # i'm not using this but if someone for some reason uses this as a library, sure, here's the results
+    return results # i'm not using this but if someone for some reason uses this as a library, here's the results
