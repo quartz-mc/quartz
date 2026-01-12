@@ -15,6 +15,9 @@ import json as js
 import pathlib
 import shutil
 import requests
+import urllib.request
+from PIL import Image
+from io import BytesIO
 from backend.exceptions import *
 
 def fatalErrorTxt(msg):
@@ -57,7 +60,6 @@ def rebuildSearchResults(modList: list[mods.Mod]):
         for mod in modList:
             with dpg.group(horizontal=True,horizontal_spacing=10):
                 dpg.add_button(width=60,height=50,label="Install",user_data=mod.serialize(),callback=si_installMod)
-                dpg.add_button(width=20,height=20,label="th")
                 with dpg.group():
                     dpg.add_text(mod.displayName,wrap=180)
                     dpg.add_text(mod.description,wrap=180)
@@ -226,11 +228,18 @@ def si_edit_cancel():
     loadInstances()
     rebuildInstancesPane()
 def si_edit_deletemod(a,b,mod):
-    print("A")
+    idx = mod[0]
+    modObj = mod[1]
+    ei = getInstance(editedInstance)
+    ei["mods"].pop(idx)
+    rebuildModsList()
+    dpg.set_value("edit_instancesaved",False)
+    on_si_sync()
 def si_edit_modenabled(a,b,mod):
     idx = mod[0]
     modObj = mod[1]
     modObj.enabled = not modObj.enabled
+    dpg.set_value("edit_instancesaved",False)
 def ei_add_mod(a,b,c):
     global modsearch_mode
     modsearch_mode = "add"
@@ -272,6 +281,7 @@ def si_installMod(a,b,mod):
     ei = getInstance(editedInstance)
     ei["mods"].append(mods.Mod(*mod))
     rebuildModsList()
+    dpg.set_value("edit_instancesaved",False)
 def si_edit_modrootignore(a,b,mod):
     idx = mod[0]
     modObj = mod[1]
@@ -281,6 +291,7 @@ def si_edit_modrootignore(a,b,mod):
         rskip.remove(modObj.id)
     else:
         rskip.append(modObj.id)
+    dpg.set_value("edit_instancesaved",False)
 def on_si_sync():
     si = instances[selectedInstance]
     modsFolder = os.path.join(si["path"],"mods")
@@ -331,8 +342,8 @@ def loadQuartzInstance(jsonPath,path=None):
     with open(jsonPath,"r") as f:
         jsonFile = js.load(f)
     jsonFile["path"] = path or jsonPath
-    jsonFile["mods"] = [mods.Mod(*x) for x in jsonFile["mods"]]
     version.upgradeQuartz(jsonFile)
+    jsonFile["mods"] = [mods.Mod(*x) for x in jsonFile["mods"]]
     return jsonFile
 
 def saveInstance(inst):
@@ -417,7 +428,7 @@ def rebuildModsList():
         if editedInstance != -1: dpg.add_table_column(label="Enable")
         dpg.add_table_column(label="Mod Id")
         dpg.add_table_column(label="Version")
-        dpg.add_table_column(label="Actions")
+        dpg.add_table_column(label="Actions",width=100)
         thisInstance = getInstance(editedInstance)
         thisInstanceMods = thisInstance["mods"]
         d.debug(editedInstance)
@@ -503,9 +514,8 @@ with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_co
         with dpg.tab(tag="edit_instance_general",label="General"):
             d.warn("Edit Instance window is shown by default.")
             dpg.add_input_text(tag="edit_instancename",label="Instance Name",default_value="")
-            with dpg.group(horizontal=True):
-                dpg.add_combo(tag="edit_instanceversion",items=list(minecraftVersions.keys()),default_value="1.21.11",label="Minecraft Version",height_mode=dpg.mvComboHeight_Large)
-                dpg.add_combo(tag="edit_instanceloader",items=["Vanilla","Fabric","LexForge","NeoForge","Quilt","Babric","BTA","Java Agent","Legacy Fabric","LiteLoader","Risugami's ModLoader","NilLoader","Ornithe","Rift"],default_value="Vanilla",label="Mod Loader",height_mode=dpg.mvComboHeight_Large)
+            dpg.add_combo(tag="edit_instanceversion",items=list(minecraftVersions.keys()),default_value="1.21.11",label="Minecraft Version",height_mode=dpg.mvComboHeight_Large)
+            dpg.add_combo(tag="edit_instanceloader",items=["Vanilla","Fabric","LexForge","NeoForge","Quilt","Babric","BTA","Java Agent","Legacy Fabric","LiteLoader","Risugami's ModLoader","NilLoader","Ornithe","Rift"],default_value="Vanilla",label="Mod Loader",height_mode=dpg.mvComboHeight_Large)
             dpg.add_checkbox(tag="edit_instancesaved",default_value=False,show=False)
         with dpg.tab(tag="ei_mods",label="Mods"):
             with dpg.group(horizontal=True):

@@ -22,7 +22,7 @@ LOADER_MAP = {
 }
 
 class Mod:
-    def __init__(self,id,versionId,displayName=None,displayVersion=None,description=None,gameVersion=None,modLoader=None,prerelease=False,enabled=True,fillNull=True):
+    def __init__(self,id,versionId,displayName=None,displayVersion=None,description=None,gameVersion=None,modLoader=None,prerelease=False,enabled=True,fillNull=True,iconUrl=None):
         self.id = id
         self.versionId = versionId
         self.gameVersion = gameVersion
@@ -38,6 +38,7 @@ class Mod:
         self.displayName = displayName
         self.displayVersion = displayVersion
         self.description = description
+        self.iconUrl = iconUrl
         self.prerelease = prerelease
         self.enabled = enabled
         if fillNull: self.fillNullData()
