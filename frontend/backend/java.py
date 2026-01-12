@@ -8,11 +8,13 @@ import urllib.request
 import zipfile
 import tarfile
 
+os.makedirs("backend/java",exist_ok=True)
+
 class JavaSource:
     ADOPTIUM = 0
     ORACLE = 1
 
-def getJava(jsrc,feature_version):
+def getJava(feature_version,jsrc=JavaSource.ADOPTIUM):
     os.makedirs("java",exist_ok=True)
     if os.path.exists(f"java/{feature_version}"): return ["warn","Exists"]
     print("\n# Getting Java...\n")
@@ -147,6 +149,7 @@ class Runner:
             self.assetsDir,"--assetIndex",self.assetIndex,self.extraMine,self.extraAuth
         ]
         args = [x for x in args if x != ""]
+        print(args)
         rcode = subprocess.call(args)
         return rcode,args
 

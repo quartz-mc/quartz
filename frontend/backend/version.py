@@ -2,6 +2,7 @@ from enum import Enum
 import requests,re,urllib.request,zipfile,os,hashlib,platform,pathlib
 import json as js
 import copy
+import semver
 from backend.debug import *
 
 def jsonInherit(base,child):
@@ -37,16 +38,42 @@ def jsonInheritance(path):
     versionsDict = {x.id:x for x in versions}
     parentVer = versionsDict[parent_id]
     download("/tmp/quartz/inheritance/","json",version=parentVer,modloader=Modloaders.VANILLA)
-    with open(pathGetOnlyChild("/tmp/quartz/inheritance/"),"r") as f:
+    onlyChild = pathGetOnlyChild("/tmp/quartz/inheritance/")
+    with open(onlyChild,"r") as f:
         parent = js.load(f)
+    os.remove(onlyChild)
     if "inheritsFrom" in parent:
         warn("Inheritance is incomplete; parent has an inheritance.")
+    json = jsonInherit(parent,child)
+    seen = {}
+    for lib in json["libraries"]:
+        full = lib["name"]
+        split = full.split(":")
+        name = split[:2]
+        if len(split) == 4:
+            name += split[3]
+        name = ":".join(name)
+        version = split[2]
+        print(full)
+        try:
+            version = semver.VersionInfo.parse(version,True)
+        except:
+            version = tuple(int(x) for x in version.split("-")[0].split(".") if x.isnumeric())
+        if name in seen:
+            if version < seen[name][1]:
+                continue
+        seen[name] = (full,version,lib)
+    json["libraries"] = [x[2] for x in seen.values()]
     with open(path,"w") as f:
-        json = jsonInherit(parent,child)
         js.dump(json,f)
     print("Inheritance completed.")
 
 class Modloaders(Enum):
+    UNKNOWN = 0
+    """
+    Used when the modloader type could not be determined.
+    """
+    
     VANILLA = 1
     """
     Unmodified minecraft directly from mojang.
@@ -65,6 +92,14 @@ class Modloaders(Enum):
     """
 
     FORGE = 4
+    """
+    The Forge Modloader which is stupid and yucky.
+
+    Provides a warning if a version released after July 12th 2023 is used.
+    Referred to as LexForge for all versions released after July 12th 2023.
+    """
+
+    LEXFORGE = 4
     """
     The Forge Modloader which is stupid and yucky.
 
@@ -124,6 +159,7 @@ def get(url="https://launchermeta.mojang.com/mc/game/version_manifest.json"):
 def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VANILLA,modloaderVersion={}):
     print(f"\n# Beginning downloads for download type '{type}'\n")
     os.makedirs(path,exist_ok=True)
+    print(modloader)
     match type:
         case "json":
             match modloader:
@@ -131,17 +167,14 @@ def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VAN
                     urls = [version.json]
                 case Modloaders.FABRIC:
                     urls = [f"https://meta.fabricmc.net/v2/versions/loader/{version.id}/{modloaderVersion['loader']}/profile/json"]
-        case "jar":
-            match modloader:
-                case Modloaders.VANILLA:
-                    if "mainJar" in json.keys():
-                        urls = [json["mainJar"]["downloads"]["artifact"]["url"]]
-                    else:
-                        urls = [json["downloads"]["client"]["url"]]
-                case Modloaders.FABRIC:
-                    urls = []
                 case _:
-                    raise NotImplementedError(f"Mod loader {modloader} not implemented.")
+                    err("Didn't recognise modloader!")
+                    raise Exception()
+        case "jar":
+            if "mainJar" in json.keys():
+                urls = [json["mainJar"]["downloads"]["artifact"]["url"]]
+            else:
+                urls = [json["downloads"]["client"]["url"]]
         case "assetIndex":
             urls = [json["assetIndex"]["url"]]
         case "natives":
@@ -189,11 +222,13 @@ def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VAN
         else:
             name = os.path.basename(url)
         truepath = os.path.join(path, name)
+        print(f" (at '{truepath}', from '{url}')")
         results += [truepath]
         if os.path.exists(truepath):
             print("  ...skipped...")
             continue
         modified += [truepath]
+        print(f" (putting at {truepath})")
         urllib.request.urlretrieve(url,truepath)
     if type == "json":
         if sha1:
@@ -215,5 +250,4 @@ def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VAN
                 for lib in jar.namelist():
                     if lib.endswith((".so",".dll",".dylib")):
                         jar.extract(lib,path)
-            if result: os.remove(result)
     return results # i'm not using this but if someone for some reason uses this as a library, here's the results
