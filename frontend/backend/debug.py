@@ -15,3 +15,6 @@ def warn(text):
     print(f"{COLOR_WARN} ??{COLOR_RESET}",text)
 def err(text):
     print(f"{COLOR_ERR} XX{COLOR_RESET}",text)
+def fatal(text):
+    print(f"{COLOR_ERR} FATAL{COLOR_RESET}",text)
+    raise Exception()

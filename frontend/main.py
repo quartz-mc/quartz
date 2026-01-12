@@ -289,6 +289,7 @@ def on_si_sync():
 def on_si_newInstance():
     global instances,selectedInstance
     instances += [{
+        "format":version.QUARTZ_JSON_LATEST,
         "path":None,
         "name":"Untitled",
         "version":list(minecraftVersions.keys())[0],
@@ -331,15 +332,17 @@ def loadQuartzInstance(jsonPath,path=None):
         jsonFile = js.load(f)
     jsonFile["path"] = path or jsonPath
     jsonFile["mods"] = [mods.Mod(*x) for x in jsonFile["mods"]]
+    version.upgradeQuartz(jsonFile)
     return jsonFile
 
 def saveInstance(inst):
     inst["mods"] = [x.serialize() for x in inst["mods"]]
     path = inst["path"]
-    os.makedirs(path,exist_ok=True)
     if path.endswith(".json"):
+        os.makedirs(os.path.dirname(path),exist_ok=True)
         jsonPath = path
     else:
+        os.makedirs(path,exist_ok=True)
         jsonPath = os.path.join(path,"quartz.json")
     with open(jsonPath,"w") as f:
         js.dump(inst,f)
@@ -410,7 +413,7 @@ def rebuildModsList():
     d.debug("Rebuilding mods list...")
     if dpg.does_item_exist("ei_mods_list"):
         dpg.delete_item("ei_mods_list")
-    with dpg.table(tag="ei_mods_list",parent="ei_mods",row_background=True):
+    with dpg.table(tag="ei_mods_list",parent="ei_mods",row_background=True,policy=dpg.mvTable_SizingFixedFit):
         if editedInstance != -1: dpg.add_table_column(label="Enable")
         dpg.add_table_column(label="Mod Id")
         dpg.add_table_column(label="Version")
@@ -437,7 +440,9 @@ def rebuildModsList():
                 with dpg.table_cell():
                     dpg.add_text(mod.displayName)
                 with dpg.table_cell():
-                    dpg.add_text(mod.displayVersion)
+                    with dpg.child_window(width=100,height=20,border=False,horizontal_scrollbar=False,menubar=False):
+                        dpg.bind_item_theme(dpg.last_item(),"invisible_child")
+                        dpg.add_text(mod.displayVersion)
                 with dpg.table_cell():
                     with dpg.group(horizontal=True):
                         dpg.add_button(label="Delete",user_data=(idx,mod),callback=si_edit_deletemod,enabled=(not root))

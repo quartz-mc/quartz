@@ -5,6 +5,20 @@ import copy
 import semver
 from backend.debug import *
 
+QUARTZ_JSON_LATEST = 2
+
+def upgradeQuartz(json:dict):
+    format = json.get("format",1)
+    match format:
+        case 1:
+            for mod in json["mods"]:
+                mod.insert(4,None) # insert key for mod descriptions
+            json["format"] = QUARTZ_JSON_LATEST
+        case 2:
+            info("Quartz.json is already up to date.")
+        case _:
+            fatal(f"Unhandled version {format}. Continuing might result in corruption, thus I am crashing instead.")
+
 def jsonInherit(base,child):
     result = copy.deepcopy(base)
     for key in child:

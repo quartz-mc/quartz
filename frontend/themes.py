@@ -36,3 +36,6 @@ def create():
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_TableRowBg,(230,220,200,255))
             dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt,(220,210,190,255))
+    with dpg.theme(tag="invisible_child"):
+        with dpg.theme_component(dpg.mvAll):
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg,(240,240,240,0))
