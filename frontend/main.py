@@ -228,7 +228,7 @@ def edit_on_close():
 def si_edit_save():
     ei = getInstance(editedInstance)
 
-    if not dpg.get_value("edit_instanceloader"):
+    if not dpg.get_value("edit_instanceloader") and editedInstance != -1:
         def callback():
             dpg.set_item_label("edit_instanceloader","Mod Loader")
         dpg.set_item_label("edit_instanceloader","Mod Loader (required)")
@@ -275,14 +275,22 @@ def ei_make_search(a,b,c):
     if ei["loader"] == "Vanilla":
         raise IllegalStateError("Searching for mods for a vanilla instance is not allowed.")
     query = dpg.get_value("ei_mod_searchbar")
-    loaderCat = mods.LOADER_MAP[ei["loader"].lower()]
-    params = {
-        "query":query,
-        "facets":js.dumps([
-            [f"versions:{ei['version']}"],
+    facets = []
+    if ei["version"] != "":
+        facets += [
+            [f"versions:{ei['version']}"]
+        ]
+    if ei["loader"] != "":
+        loaderCat = mods.LOADER_MAP[ei["loader"].lower()]
+        facets += [
             [f"categories:{loaderCat}"]
-        ])
+        ]
+    params = {
+        "query":query
         }
+    if facets != []:
+        params["facets"] = js.dumps(facets)
+    print(params)
     r = requests.get("https://api.modrinth.com/v2/search",params)
     searchResults = r.json()
     if r.status_code != 200:
@@ -298,9 +306,10 @@ def ei_make_search(a,b,c):
     if r.status_code != 200:
         d.err(searchResults)
         raise Exception()
-    for i,obj in enumerate(searchResults["hits"]):
-        obj["latest_version_name"] = versionResults[i]["name"]
-    modList = [mods.Mod(x["slug"],x["latest_version"],x["title"],x["latest_version_name"],x["description"],ei["version"],ei["loader"],False,True,fillNull=False) for x in searchResults["hits"]]
+    versionIdNames = {}
+    for i,obj in enumerate(versionResults):
+        versionIdNames[obj["id"]] = obj["version_number"]
+    modList = [mods.Mod(x["slug"],x["latest_version"],x["title"],versionIdNames[x["latest_version"]],x["description"],ei["version"],ei["loader"],False,True,fillNull=False) for x in searchResults["hits"]]
     rebuildSearchResults(modList)
 def mca_auth_new(a,b,c):
     global activeCredentials
@@ -346,9 +355,14 @@ def before_render():
         dpg.show_item("play_assets")
     else:
         dpg.hide_item("play_assets")
-    dpg.set_value("si_name",instances[selectedInstance]["name"])
-    dpg.set_value("si_ver","Version: " + instances[selectedInstance]["version"])
-    dpg.set_value("si_loader","Loader: " + instances[selectedInstance]["loader"])
+    if len(instances) == 0:
+        dpg.set_value("si_name","No instance selected.")
+        dpg.set_value("si_ver","")
+        dpg.set_value("si_loader","")
+    else:
+        dpg.set_value("si_name",instances[selectedInstance]["name"])
+        dpg.set_value("si_ver","Version: " + instances[selectedInstance]["version"])
+        dpg.set_value("si_loader","Loader: " + instances[selectedInstance]["loader"])
 print("four")
 dpg.create_context()
 dpg.create_viewport()
@@ -363,6 +377,18 @@ print("six")
 
 def loadJavas():
     global javas
+    os.makedirs("java",exist_ok=True)
+    os.makedirs("instances",exist_ok=True)
+    if not "quartzroot.json" in os.listdir("instances"):
+        with open("instances/quartzroot.json","w") as f:
+            f.write("""{
+    "format": 2,
+    "mods": [],
+    "version": "",
+    "loader": "",
+    "path": "instances/quartzroot.json",
+    "name": "unused"
+}""")
     javas = os.listdir("java")
     javas = {x:os.path.join("java",x,"bin/java") for x in javas}
 
@@ -373,6 +399,7 @@ def loadQuartzInstance(jsonPath,path=None):
     with open(jsonPath,"r") as f:
         jsonFile = js.load(f)
     jsonFile["path"] = path or jsonPath
+    print(jsonFile)
     version.upgradeQuartz(jsonFile)
     jsonFile["mods"] = [mods.Mod(*x) for x in jsonFile["mods"]]
     return jsonFile
@@ -569,42 +596,13 @@ with dpg.window(tag="ei_mod_search",label="Adding mods",autosize=True,show=False
         dpg.add_input_text(tag="ei_mod_searchbar",width=215)
         dpg.add_button(label="Search",callback=ei_make_search,width=75)
     with dpg.child_window(tag="ei_mod_search_results",height=300,width=300):
-        with dpg.group(tag="ei_mod_search_results_group"):
-            with dpg.group(horizontal=True,horizontal_spacing=10):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("Fabric API")
-                    dpg.add_text("Lightweight and modular API providing common hooks and intercompatibility measures utilized by mods using the Fabric toolchain.",wrap=200)
-            with dpg.group(horizontal=True):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("Sodium")
-                    dpg.add_text("The fastest and most compatible rendering optimization mod for Minecraft. Now available for both NeoForge and Fabric!",wrap=200)
-            with dpg.group(horizontal=True):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("Cloth Config API")
-                    dpg.add_text("Configuration Library for Minecraft Mods",wrap=200)
-            with dpg.group(horizontal=True):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("Iris Shaders")
-                    dpg.add_text("A modern shader pack loader for Minecraft intended to be compatible with existing OptiFine shader packs",wrap=200)
-            with dpg.group(horizontal=True):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("FerriteCore")
-                    dpg.add_text("Memory usage optimizations")
-            with dpg.group(horizontal=True):
-                dpg.add_button(width=50,height=50,label="thumb")
-                with dpg.group():
-                    dpg.add_text("Mod Name Here")
-                    dpg.add_text("Mod Description Goes Here")
+        pass
 dpg.show_viewport()
 def initFrame():
     rebuildInstancesPane()
     # on_si_edit(None,None,selectedInstance)
     # ei_add_mod(None,None,selectedInstance)
+    # on_si_edit(None,None,selectedInstance)
 dpg.set_frame_callback(2,initFrame)
 if not dpg.is_viewport_ok():
     raise RuntimeError("DearPyGUI fail.")
