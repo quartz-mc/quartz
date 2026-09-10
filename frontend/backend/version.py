@@ -160,9 +160,12 @@ def fsha1(path):
     return sha.hexdigest()
 
 def get(url="https://launchermeta.mojang.com/mc/game/version_manifest.json"):
-    response = requests.get(url)
+    response = requests.get(url,timeout=(3,60))
+    print("a")
     if str(response.status_code)[0] == "2":
+        print("b")
         json = response.json()
+        print("c")
     else:
         return None
     jsonversions = json["versions"]

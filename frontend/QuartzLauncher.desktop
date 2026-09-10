@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Quartz Launcher
+GenericName=Minecraft Launcher
+Comment=Modded Minecraft Launcher
+Exec=python "/home/cookii/Desktop/software/Software/Quartz Launcher/frontend/main.py"
+Icon=/home/cookii/Desktop/software/Software/Quartz Launcher/frontend/icon.png
+Categories=Game;Utility;
+Keywords=minecraft;prism;
+Path=/home/cookii/Desktop/software/Software/Quartz Launcher/frontend/

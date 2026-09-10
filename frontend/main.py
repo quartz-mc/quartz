@@ -20,17 +20,40 @@ from PIL import Image
 from io import BytesIO
 from backend.exceptions import *
 
-def fatalErrorTxt(msg):
+activeCredentials = backend.auth.offline("quartz_dev")
 
-    with dpg.window(no_resize=True,no_move=True,label="Fatal Error!"):
+print("one")
+
+def fatalErrorTxt(msg):
+    print("a")
+    dpg.destroy_context()
+    if True:
+        print("b")
+        dpg.create_context()
+        print("c")
+        dpg.create_viewport(title="oops!",width=400,height=150,resizable=False)
+        print("d")
+        dpg.setup_dearpygui()
+        themes.create()
+        dpg.bind_theme("quartz_theme")
+        print("e")
+        dpg.show_viewport()
+        print("f")
+
+    with dpg.window(no_resize=True,no_move=True,label="Fatal Error!",width=400,height=150):
         dpg.add_text("Quartz Launcher has encountered a fatal error!\n")
         dpg.add_text(msg)
         dpg.add_text("\nQuartz will close in 30 seconds.")
-    for i in range(30):
-        time.sleep(1)
-        if not dpg.is_dearpygui_running():
-            return
+    print("g")
+    start = time.time()
+    while dpg.is_dearpygui_running():
+        dpg.render_dearpygui_frame()
+        if time.time()-start > 30:
+            break
     dpg.stop_dearpygui()
+
+# fatalErrorTxt("hi")
+# exit()
 
 def fatalError(exception):
     fatalErrorTxt("".join(traceback.format_exception(exception)))
@@ -117,8 +140,10 @@ def on_viewport_resize(sender,app_data):
     rebuildInstancesPane()
 def on_window_close():
     dpg.stop_dearpygui()
+print("two")
 versions = version.get()
 minecraftVersions = {x.id:x for x in versions}
+print("three")
 def launchGame(si):
     global shared_assets_progress
     thisVer = minecraftVersions[si["version"]]
@@ -162,7 +187,7 @@ def launchGame(si):
         javaPath = javas[javaVersion]
         run = backend.java.Runner(javaPath,f"versions/{versionId}/natives",backend.java.Memory(512,2048),backend.brand.Brand("Quartz","1.0.0"),
                 backend.java.ClassPath(f"versions/{versionId}/libraries",f"versions/{versionId}/client.jar"),backend.java.Instance(versionId,versionType,
-                f"{si["path"]}",backend.java.Assets("assets/",f"{assets['id']}"),json["mainClass"]),backend.auth.offline("quartz_dev"),
+                f"{si["path"]}",backend.java.Assets("assets/",f"{assets['id']}"),json["mainClass"]),activeCredentials,
                 backend.java.ExtraArgs("",""))
         run.run()
     except Exception as e:
@@ -277,6 +302,9 @@ def ei_make_search(a,b,c):
         obj["latest_version_name"] = versionResults[i]["name"]
     modList = [mods.Mod(x["slug"],x["latest_version"],x["title"],x["latest_version_name"],x["description"],ei["version"],ei["loader"],False,True,fillNull=False) for x in searchResults["hits"]]
     rebuildSearchResults(modList)
+def mca_auth_new(a,b,c):
+    global activeCredentials
+    activeCredentials = backend.auth.auth_new()
 def si_installMod(a,b,mod):
     ei = getInstance(editedInstance)
     ei["mods"].append(mods.Mod(*mod))
@@ -321,15 +349,17 @@ def before_render():
     dpg.set_value("si_name",instances[selectedInstance]["name"])
     dpg.set_value("si_ver","Version: " + instances[selectedInstance]["version"])
     dpg.set_value("si_loader","Loader: " + instances[selectedInstance]["loader"])
-
+print("four")
 dpg.create_context()
 dpg.create_viewport()
 dpg.set_viewport_resize_callback(on_viewport_resize)
 dpg.setup_dearpygui()
+print("five")
 
 themes.create()
 
 dpg.bind_theme("quartz_theme")
+print("six")
 
 def loadJavas():
     global javas
@@ -337,6 +367,7 @@ def loadJavas():
     javas = {x:os.path.join("java",x,"bin/java") for x in javas}
 
 loadJavas()
+print("seven")
 
 def loadQuartzInstance(jsonPath,path=None):
     with open(jsonPath,"r") as f:
@@ -378,8 +409,9 @@ def getInstance(idx):
         print(instances,idx)
         return instances[idx]
 
+print("eight")
 loadInstances()
-
+print("nine")
 # instances = [
 #     {
 #         "path":"instances/demo",
@@ -509,6 +541,7 @@ with dpg.window(tag="root_window",label="quartz",width=600,height=400,no_resize=
 
             dpg.add_button(label="Delete")
 editedInstance = 0
+print("ten")
 with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_collapse=True,no_close=False,on_close=edit_on_close,autosize=True,min_size=(200,50)):
     with dpg.tab_bar():
         with dpg.tab(tag="edit_instance_general",label="General"):
@@ -525,7 +558,13 @@ with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_co
     with dpg.group(horizontal=True):
         dpg.add_button(label="Save",callback=si_edit_save)
         dpg.add_button(label="Cancel",callback=si_edit_cancel)
-with dpg.window(tag="ei_mod_search",label="Adding mods",autosize=True):
+with dpg.window(tag="mc_auth",label="Authenticate",autosize=True,show=True):
+    dpg.add_text("Authenticate as:")
+    backend.auth.getCache()
+    with dpg.group():
+        dpg.add_text("this would be a list of accounts, if i ever actually implemented that")
+    dpg.add_button(label="A new account",callback=mca_auth_new,width=150)
+with dpg.window(tag="ei_mod_search",label="Adding mods",autosize=True,show=False):
     with dpg.group(horizontal=True,horizontal_spacing=10):
         dpg.add_input_text(tag="ei_mod_searchbar",width=215)
         dpg.add_button(label="Search",callback=ei_make_search,width=75)
@@ -564,8 +603,8 @@ with dpg.window(tag="ei_mod_search",label="Adding mods",autosize=True):
 dpg.show_viewport()
 def initFrame():
     rebuildInstancesPane()
-    on_si_edit(None,None,selectedInstance)
-    ei_add_mod(None,None,selectedInstance)
+    # on_si_edit(None,None,selectedInstance)
+    # ei_add_mod(None,None,selectedInstance)
 dpg.set_frame_callback(2,initFrame)
 if not dpg.is_viewport_ok():
     raise RuntimeError("DearPyGUI fail.")
