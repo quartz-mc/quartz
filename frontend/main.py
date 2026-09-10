@@ -355,7 +355,7 @@ def before_render():
         dpg.show_item("play_assets")
     else:
         dpg.hide_item("play_assets")
-    if len(instances) == 0:
+    if len(instances) == 0 or selectedInstance >= len(instances):
         dpg.set_value("si_name","No instance selected.")
         dpg.set_value("si_ver","")
         dpg.set_value("si_loader","")

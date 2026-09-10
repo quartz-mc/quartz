@@ -124,6 +124,8 @@ class Runner:
         self.uuid = credentials.uuid
         self.accessToken = credentials.accessToken
         self.userType = credentials.userType
+        self.offline = credentials.offline
+        self.demo = credentials.demo
 
         self.version = instance.version
         self.versionType = instance.versionType
@@ -148,6 +150,8 @@ class Runner:
             f"-cp",f"{self.ClassPath}",self.entrypoint,*credentials,"--version",self.version,"--gameDir",self.gameDir,"--assetsDir",
             self.assetsDir,"--assetIndex",self.assetIndex,self.extraMine,self.extraAuth
         ]
+        if self.demo:
+            args.append("--demo")
         args = [x for x in args if x != ""]
         print(args)
         rcode = subprocess.call(args)

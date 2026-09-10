@@ -16,12 +16,14 @@ def getCache():
     print("The cache is",cache)
 
 class Credentials:
-    def __init__(self,username,uuid,accessToken,userType):
+    def __init__(self,username,uuid,accessToken,userType,offline=True,demo=True):
         self.username = username
         self.uuid = uuid
         self.accessToken = accessToken
         self.userType = userType
         self.extras = "" # extra arguments
+        self.offline = offline
+        self.demo = demo
 
 def offline(username):
     offlineUUID = uuid.uuid3(uuid.NAMESPACE_DNS,f"OfflinePlayer:{username}").hex
@@ -92,7 +94,7 @@ def auth(msToken):
         response.raise_for_status()
     data = response.json()
     mcToken = data["access_token"]
-    creds = Credentials("","",mcToken,"msa")
+    creds = Credentials("","",mcToken,"msa",offline=False,demo=False)
 
     info("Checking if the account owns Minecraft...")
 
