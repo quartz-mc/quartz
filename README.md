@@ -18,7 +18,7 @@ Every instance inherits the mods and resource packs from the root instance, and 
 - Inheritance (all instances contain all mods and packs from a 'root instance'. they may be disabled, but not removed.)
 - Downloading from modrinth
 - Modpacks (...partial; cannot be downloaded from modrinth yet.)
-- Authentication (...untested, depends on getting put on the allow list, which has yet to happen...)
+- Authentication
 
 ## Future Features
 - Class override modding support
