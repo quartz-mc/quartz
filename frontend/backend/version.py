@@ -122,6 +122,19 @@ class Modloaders(Enum):
     Referred to as LexForge for all versions released after July 12th 2023.
     """
 
+if True:
+    latestModloaderVersions = {
+        Modloaders.FABRIC:"0.18.4" # hardcoded default value
+    }
+    # fabric
+    r = requests.get("https://meta.fabricmc.net/v2/versions/loader")
+    r.raise_for_status()
+    j = r.json()
+    stable = [x for x in j if x["stable"] == True]
+    latest = stable[0]
+    latestModloaderVersions[Modloaders.FABRIC] = latest["version"]
+    print(latestModloaderVersions)
+
 class ChecksumError(Exception):
     def __init__(self, *args):
         super().__init__(*args)
@@ -174,7 +187,7 @@ def get(url="https://launchermeta.mojang.com/mc/game/version_manifest.json"):
         versions.append(Version(ver["id"],ver["type"],ver["url"],ver["time"],ver["releaseTime"]))
     return versions
 
-def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VANILLA,modloaderVersion={}):
+def download(path,type,version=None,sha1=None,json=None,modloader=Modloaders.VANILLA,modloaderVersion=None):
     print(f"\n# Beginning downloads for download type '{type}'\n")
     os.makedirs(path,exist_ok=True)
     print(modloader)

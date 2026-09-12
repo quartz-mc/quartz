@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import dearpygui.dearpygui as dpg
 import themes
 import backend.mods as mods
@@ -7,6 +8,9 @@ import backend.version as version
 import backend.assets as _assets
 import backend.brand
 import backend.auth
+import backend.util as util
+import backend.modpacks as modpacks
+from backend.api import *
 import os
 import time
 import traceback
@@ -20,36 +24,45 @@ from PIL import Image
 from io import BytesIO
 from backend.exceptions import *
 
-activeCredentials = backend.auth.offline("quartz_dev")
+DEBUG = True
+
+activeCredentials = backend.auth.auth_last() or backend.auth.offline("quartz_demo")
+
+if DEBUG == True:
+    activeCredentials.demo = False
+    activeCredentials.dev = True
 
 print("one")
 
 def fatalErrorTxt(msg):
-    print("a")
-    dpg.destroy_context()
-    if True:
-        print("b")
-        dpg.create_context()
-        print("c")
-        dpg.create_viewport(title="oops!",width=400,height=150,resizable=False)
-        print("d")
-        dpg.setup_dearpygui()
-        themes.create()
-        dpg.bind_theme("quartz_theme")
-        print("e")
-        dpg.show_viewport()
-        print("f")
+    # print("a")
+    # if True:
+    #     print("b")
+    #     dpg.create_context()
+    #     print("c")
+    #     dpg.create_viewport(title="oops!",width=400,height=150,resizable=False)
+    #     print("d")
+    #     dpg.setup_dearpygui()
+    #     themes.create()
+    #     dpg.bind_theme("quartz_theme")
+    #     print("e")
+    #     dpg.show_viewport()
+    # #     print("f")
 
-    with dpg.window(no_resize=True,no_move=True,label="Fatal Error!",width=400,height=150):
-        dpg.add_text("Quartz Launcher has encountered a fatal error!\n")
-        dpg.add_text(msg)
-        dpg.add_text("\nQuartz will close in 30 seconds.")
-    print("g")
-    start = time.time()
-    while dpg.is_dearpygui_running():
-        dpg.render_dearpygui_frame()
-        if time.time()-start > 30:
-            break
+    # with dpg.window(no_resize=True,no_move=True,label="Fatal Error!",width=400,height=150):
+    #     dpg.add_text("Quartz Launcher has encountered a fatal error!\n")
+    #     dpg.add_text(msg)
+    #     dpg.add_text("\nQuartz will close in 30 seconds.")
+    # print("g")
+    # start = time.time()
+    # while dpg.is_dearpygui_running():
+    #     dpg.render_dearpygui_frame()
+    #     if time.time()-start > 30:
+    #         break
+    print("fatal error")
+
+    import tkinter.messagebox
+    tkinter.messagebox.showerror("oops!",f"Quartz Launcher has encountered a fatal error!",detail=msg)
     dpg.stop_dearpygui()
 
 # fatalErrorTxt("hi")
@@ -63,14 +76,17 @@ def rebuildMods(si):
     print("\n# Rebuilding mods...\n")
     modsDir = os.path.join(si["path"],"mods")
     os.makedirs(modsDir,exist_ok=True)
-    for x in si["mods"]:
-        mod: mods.Mod = x
-        mod.download(modsDir)
+    mods.downloadManyMods(si["mods"],modsDir)
+    mods.projectManyMods(si["mods"])
+    alreadyIn = [x.myProject["id"] for x in si["mods"]]
+    alreadyIn += [x.myProject["slug"] for x in si["mods"]]
+    rootModsToDownload = []
     for x in root["mods"]:
         mod: mods.Mod = x
-        if mod.id in si["rootSkipped"]:
-            continue
-        mod.download(modsDir,mandateVersion=si["version"],mandateLoader=si["loader"].lower())
+        if mod.id in alreadyIn: continue
+        if (mod.fillNullVersion(si["version"],si["loader"],False) != 0): continue
+        rootModsToDownload.append(x)
+    mods.downloadManyMods(rootModsToDownload,modsDir)
 
 def on_instance_click(sender,app_data,user_data):
     global selectedInstance
@@ -148,18 +164,24 @@ def launchGame(si):
     global shared_assets_progress
     thisVer = minecraftVersions[si["version"]]
     loaderId = si["loader"].lower()
-    versionId = thisVer.id + f"-{loaderId}"
+    modloader = version.Modloaders.UNKNOWN
+    for i in version.Modloaders:
+        if i.name.lower() == loaderId:
+            modloader = i
+    loaderVer = None
+    if modloader in version.latestModloaderVersions:
+        loaderVer = version.latestModloaderVersions[modloader]
+    else:
+        loaderVer = "unknown"
+    versionFolder = thisVer.id + f"-{loaderId}" + f"-{loaderVer}"
+    versionId = thisVer.id + f"-{loaderId}" + "-%s"
     versionType = thisVer.type
     try:
         shared_assets_progress = "Downloading: JSON"
-        modloader = version.Modloaders.UNKNOWN
-        for i in version.Modloaders:
-            if i.name.lower() == loaderId:
-                modloader = i
         if modloader == version.Modloaders.UNKNOWN:
             d.err("Modloader type could not be determined!")
             raise IllegalStateError("No modloader type!")
-        json = version.download(f"versions/{versionId}/",version=thisVer,type="json",modloader=modloader,modloaderVersion={"loader":"0.18.4"})
+        json = version.download(f"versions/{versionFolder}/",version=thisVer,type="json",modloader=modloader,modloaderVersion={"loader":loaderVer})
         assets = { # this is all the info i need.
             "id":json["assetIndex"]["id"],
             "sha1":json["assetIndex"]["sha1"]
@@ -176,17 +198,17 @@ def launchGame(si):
         shared_assets_progress = "Downloading: Assets (this may take up to 10 minutes)"
         _assets.download(f"assets/objects",f"assets/indexes/{assets['id']}.json")
         shared_assets_progress = "Downloading: Minecraft Client"
-        version.download(f"versions/{versionId}/",json=json,type="jar",modloader=modloader,modloaderVersion={"loader":"0.18.4"})
+        version.download(f"versions/{versionFolder}/",json=json,type="jar",modloader=modloader,modloaderVersion={"loader":"0.18.4"})
         shared_assets_progress = "Downloading: System Libraries"
-        version.download(f"versions/{versionId}/natives",json=json,type="natives")
+        version.download(f"versions/{versionFolder}/natives",json=json,type="natives")
         shared_assets_progress = "Downloading: Java Libraries"
-        version.download(f"versions/{versionId}/libraries",json=json,type="libraries")
+        version.download(f"versions/{versionFolder}/libraries",json=json,type="libraries")
         shared_assets_progress = "Downloading: Mod Files"
         rebuildMods(si)
         shared_assets_progress = None
         javaPath = javas[javaVersion]
-        run = backend.java.Runner(javaPath,f"versions/{versionId}/natives",backend.java.Memory(512,2048),backend.brand.Brand("Quartz","1.0.0"),
-                backend.java.ClassPath(f"versions/{versionId}/libraries",f"versions/{versionId}/client.jar"),backend.java.Instance(versionId,versionType,
+        run = backend.java.Runner(javaPath,f"versions/{versionFolder}/natives",backend.java.Memory(512,2048),backend.brand.brand,
+                backend.java.ClassPath(f"versions/{versionFolder}/libraries",f"versions/{versionFolder}/client.jar"),backend.java.Instance(versionFolder,versionType,
                 f"{si["path"]}",backend.java.Assets("assets/",f"{assets['id']}"),json["mainClass"]),activeCredentials,
                 backend.java.ExtraArgs("",""))
         run.run()
@@ -240,11 +262,8 @@ def si_edit_save():
     ei["version"] = dpg.get_value("edit_instanceversion")
     ei["loader"] = dpg.get_value("edit_instanceloader")
 
-    if ei["path"] == None:
-        ei["path"] = "instances/" + "".join([x.replace(" ","-").lower() for x in ei["name"] if x.isalnum() or x in "- "])
-
     dpg.set_value("edit_instancesaved",True)
-    saveInstance(ei)
+    util.saveInstance(ei)
     loadInstances()
     rebuildInstancesPane()
 def si_edit_cancel():
@@ -291,7 +310,7 @@ def ei_make_search(a,b,c):
     if facets != []:
         params["facets"] = js.dumps(facets)
     print(params)
-    r = requests.get("https://api.modrinth.com/v2/search",params)
+    r = apiGet("https://api.modrinth.com/v2/search",params)
     searchResults = r.json()
     if r.status_code != 200:
         d.err(searchResults)
@@ -301,7 +320,7 @@ def ei_make_search(a,b,c):
     params = {
         "ids":js.dumps(versions)
     }
-    r = requests.get("https://api.modrinth.com/v2/versions",params)
+    r = apiGet("https://api.modrinth.com/v2/versions",params)
     versionResults = r.json()
     if r.status_code != 200:
         d.err(searchResults)
@@ -314,6 +333,9 @@ def ei_make_search(a,b,c):
 def mca_auth_new(a,b,c):
     global activeCredentials
     activeCredentials = backend.auth.auth_new()
+def mca_auth_old(a,b,account):
+    global activeCredentials
+    activeCredentials = backend.auth.auth_old(account)
 def si_installMod(a,b,mod):
     ei = getInstance(editedInstance)
     ei["mods"].append(mods.Mod(*mod))
@@ -334,23 +356,75 @@ def on_si_sync():
     modsFolder = os.path.join(si["path"],"mods")
     if modsFolder:
         shutil.rmtree(modsFolder)
+def on_si_delete():
+    global selectedInstance
+    instToDel = selectedInstance
+    def confirm():
+        global selectedInstance
+        targetPath = pathlib.Path(instances[instToDel]["path"])
+        if targetPath.resolve().is_relative_to(
+            pathlib.Path("instances/").resolve()
+        ):
+            shutil.rmtree(targetPath)
+        instances.pop(instToDel)
+        selectedInstance = -1
+        dpg.hide_item("are_you_sure")
+        rebuildInstancesPane()
+    dpg.set_item_callback("ays_confirm",confirm)
+    dpg.show_item("are_you_sure")
 def on_si_newInstance():
     global instances,selectedInstance
-    instances += [{
-        "format":version.QUARTZ_JSON_LATEST,
-        "path":None,
-        "name":"Untitled",
-        "version":list(minecraftVersions.keys())[0],
-        "loader":"",
-        "mods":[],
-        "rootSkipped":[]
-    }]
+    util.createInstance(instances,list(minecraftVersions.keys())[0])
+    # instances += [{
+    #     "format":version.QUARTZ_JSON_LATEST,
+    #     "path":None,
+    #     "name":"Untitled",
+    #     "version":list(minecraftVersions.keys())[0],
+    #     "loader":"",
+    #     "mods":[],
+    #     "rootSkipped":[]
+    # }]
     selectedInstance = len(instances)-1
+    rebuildInstancesPane()
+    on_si_edit(0,0)
+def on_si_importInstance():
+    with dpg.file_dialog(label="Choose a Modpack",file_count=1,callback=importInstance_picked,cancel_callback=None,height=400,):
+        dpg.add_file_extension("Modrinth Pack (.mrpack){.mrpack}")
+def on_si_authenticate():
+    dpg.hide_item("mc_auth")
+    cache = backend.auth.getCache()
+    if dpg.does_item_exist("mca_list"):
+        dpg.delete_item("mca_list")
+    if dpg.does_item_exist("mca_auth_new_label"):
+        dpg.delete_item("mca_auth_new_label")
+    if len(cache) > 0:
+        with dpg.child_window(tag="mca_list",parent="mc_auth",before="mca_auth_new",width=200,height=150) as item:
+            maxWidth = 0
+            height = 10
+            for i in cache:
+                dpg.add_button(label=i["username"],user_data=i,callback=mca_auth_old)
+                w,h = dpg.get_text_size(i["username"])
+                w+=8
+                h+=8
+                if w > maxWidth: maxWidth = w
+                height += h + 4
+            dpg.set_item_width(item,maxWidth+16)
+            dpg.set_item_height(item,min(height,150))
+        dpg.add_text("OR",tag="mca_auth_new_label",parent="mc_auth",before="mca_auth_new")
+    dpg.show_item("mc_auth")
+def importInstance_picked(a,results,c):
+    global instances,selectedInstance
+    with dpg.window(tag="fetchingModpack",label="Fetching modpack...",no_close=True,width=300,height=150):
+        dpg.add_text("Fetching modpack...\n(this may take a while!)",wrap=300)
+    modpacks.fetchArbitraryPack(instances,results["file_path_name"])
+    dpg.delete_item("fetchingModpack")
+    selectedInstance = len(instances)-1
+    rebuildInstancesPane()
     on_si_edit(0,0)
 
 shared_assets_progress = None
 def before_render():
-    if shared_assets_progress is not None:
+    if shared_assets_progress != None:
         dpg.set_value("assets_progress",shared_assets_progress)
         dpg.show_item("play_assets")
     else:
@@ -403,18 +477,6 @@ def loadQuartzInstance(jsonPath,path=None):
     version.upgradeQuartz(jsonFile)
     jsonFile["mods"] = [mods.Mod(*x) for x in jsonFile["mods"]]
     return jsonFile
-
-def saveInstance(inst):
-    inst["mods"] = [x.serialize() for x in inst["mods"]]
-    path = inst["path"]
-    if path.endswith(".json"):
-        os.makedirs(os.path.dirname(path),exist_ok=True)
-        jsonPath = path
-    else:
-        os.makedirs(path,exist_ok=True)
-        jsonPath = os.path.join(path,"quartz.json")
-    with open(jsonPath,"w") as f:
-        js.dump(inst,f)
 
 def loadInstances():
     global instances,root
@@ -496,6 +558,7 @@ def rebuildModsList():
         else:
             rootMods = []
         def addRow(idx,mod,root=False):
+            d.debug(mod)
             d.debug(mod.serialize())
             with dpg.table_row() as row:
                 if root: dpg.bind_item_theme(row,"quartz_inherited_row")
@@ -532,7 +595,9 @@ with dpg.window(tag="play_assets",label="preparing to launch...",show=False):
 with dpg.window(tag="root_window",label="quartz",width=600,height=400,no_resize=True,no_move=True,no_collapse=True,on_close=on_window_close,
                 no_bring_to_front_on_focus=True):
     with dpg.menu_bar():
+        dpg.add_button(label="Authenticate",callback=on_si_authenticate)
         dpg.add_button(label="Create Instance",callback=on_si_newInstance)
+        dpg.add_button(label="Import Modpack",callback=on_si_importInstance)
         dpg.add_button(label="Open Root Instance",callback=on_si_editRoot)
         with dpg.menu(label="Settings"):
             dpg.add_button(label="Settings")
@@ -566,10 +631,10 @@ with dpg.window(tag="root_window",label="quartz",width=600,height=400,no_resize=
 
             dpg.add_spacer(height=20)
 
-            dpg.add_button(label="Delete")
+            dpg.add_button(label="Delete",callback=on_si_delete)
 editedInstance = 0
 print("ten")
-with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_collapse=True,no_close=False,on_close=edit_on_close,autosize=True,min_size=(200,50)):
+with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_collapse=True,no_close=False,on_close=edit_on_close,autosize=True,min_size=(200,50),max_size=(30000,600)):
     with dpg.tab_bar():
         with dpg.tab(tag="edit_instance_general",label="General"):
             d.warn("Edit Instance window is shown by default.")
@@ -585,28 +650,38 @@ with dpg.window(tag="edit_instance",label="editing an instance",show=False,no_co
     with dpg.group(horizontal=True):
         dpg.add_button(label="Save",callback=si_edit_save)
         dpg.add_button(label="Cancel",callback=si_edit_cancel)
-with dpg.window(tag="mc_auth",label="Authenticate",autosize=True,show=True):
+with dpg.window(tag="mc_auth",label="Authenticate",autosize=True,show=False):
     dpg.add_text("Authenticate as:")
-    backend.auth.getCache()
-    with dpg.group():
-        dpg.add_text("this would be a list of accounts, if i ever actually implemented that")
-    dpg.add_button(label="A new account",callback=mca_auth_new,width=150)
+    with dpg.child_window(tag="mca_list",width=300,height=300):
+        dpg.add_text("something must've went wrong while loading this lol")
+    dpg.add_text("OR",tag="mca_auth_new_label")
+    dpg.add_button(tag="mca_auth_new",label="A new account",callback=mca_auth_new,width=150)
 with dpg.window(tag="ei_mod_search",label="Adding mods",autosize=True,show=False):
     with dpg.group(horizontal=True,horizontal_spacing=10):
         dpg.add_input_text(tag="ei_mod_searchbar",width=215)
         dpg.add_button(label="Search",callback=ei_make_search,width=75)
     with dpg.child_window(tag="ei_mod_search_results",height=300,width=300):
         pass
+with dpg.window(tag="are_you_sure",label="Are you sure?",autosize=True,show=False):
+    dpg.add_text("This operation is irreversible! Are you sure you want to proceed?",wrap=200)
+    with dpg.group(horizontal=True):
+        dpg.add_button(tag="ays_confirm",label="Yes")
+        dpg.add_button(label="No",callback=lambda a,b,c : dpg.hide_item("are_you_sure"))
 dpg.show_viewport()
 def initFrame():
     rebuildInstancesPane()
     # on_si_edit(None,None,selectedInstance)
     # ei_add_mod(None,None,selectedInstance)
     # on_si_edit(None,None,selectedInstance)
+    on_si_authenticate()
 dpg.set_frame_callback(2,initFrame)
 if not dpg.is_viewport_ok():
     raise RuntimeError("DearPyGUI fail.")
 while dpg.is_dearpygui_running():
     before_render()
     dpg.render_dearpygui_frame()
+d.info("Shutting down.")
 dpg.destroy_context()
+
+backend.auth.shutdown()
+d.info("Shutdown finished!")

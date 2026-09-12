@@ -126,6 +126,7 @@ class Runner:
         self.userType = credentials.userType
         self.offline = credentials.offline
         self.demo = credentials.demo
+        self.dev = credentials.dev
 
         self.version = instance.version
         self.versionType = instance.versionType
@@ -152,6 +153,8 @@ class Runner:
         ]
         if self.demo:
             args.append("--demo")
+        if self.dev: 
+            args.append("--offlineDeveloperMode")
         args = [x for x in args if x != ""]
         print(args)
         rcode = subprocess.call(args)
